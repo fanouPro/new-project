@@ -15,8 +15,9 @@ Les règles sont déduites des deux implémentations de référence des auteurs 
 - [`beyondxscratch/mandalore-express-hive-pattern`](https://gitlab.com/beyondxscratch/mandalore-express-hive-pattern)
   (Kotlin) : réservation de trains spatiaux.
 
-Tout le code de la bibliothèque est en français : API, identifiants des règles, messages, tests et exemples. Les
-identifiants s'écrivent sans accents, les textes avec.
+La vérification se fait au choix en français ou en anglais (voir [Langue de la vérification](#langue-de-la-vérification)).
+Le code de la bibliothèque, lui, est en français : API, tests et exemples. Les identifiants s'écrivent sans accents,
+les textes avec.
 
 ## Utilisation
 
@@ -59,6 +60,31 @@ produits par ArchUnit, en anglais.
 La bibliothèque n'est pas encore publiée : `mvn install`, puis dépendance de test
 `io.github.fanoupro:hive-archunit:0.1.0-SNAPSHOT`.
 
+## Langue de la vérification
+
+La langue choisit les identifiants des règles, leurs descriptions et justifications, les messages de violation, et
+les conventions de paquetages attendues par défaut. Elle se déclare, par ordre de priorité :
+
+1. dans le code, pour une ruche : `Ruche.nouvelle().langue(Langue.ANGLAIS)` ;
+2. dans la configuration ArchUnit, pour tous les tests : `ruche.langue=en` dans le fichier `archunit.properties` des
+   ressources de test, ou la propriété système `-Darchunit.ruche.langue=en`, qui l'emporte sur le fichier ;
+3. à défaut, la vérification est en français (`fr`).
+
+| | `fr` (par défaut) | `en` |
+|---|---|---|---|
+| Identifiant de règle | `LES_DOMAINES_SONT_ISOLES` | `DOMAINS_ARE_ISOLATED` |
+| Description de la règle | `le domaine d'un module ne dépend jamais d'un autre module, car …` | `the domain of a module never depends on another module, because …` |
+| Message de violation | `domaine du module 'catalogue' -> API du module 'commande' : …` | `module 'catalogue' domain -> module 'commande' API: …` |
+| Conventions par défaut | `ConventionsRuche.francaises()` : `domaine`, `infrastructure.controleur`, `infrastructure.intraprocessus`… | `ConventionsRuche.anglaises()` : `domain`, `infrastructure.controller`, `infrastructure.inproc`… |
+
+La langue des messages et celle des paquetages se dissocient en déclarant les conventions : par exemple
+`.langue(Langue.ANGLAIS).conventions(ConventionsRuche.francaises())` vérifie une base de code aux paquetages
+français avec des messages en anglais. Dans le code, les règles se désignent toujours par leur constante
+`RegleRuche`, quelle que soit la langue.
+
+Restent en français quelle que soit la langue : l'API de la bibliothèque et les erreurs de déclaration de la ruche
+(paquetage invalide, zones imbriquées…). Restent en anglais : les textes produits par ArchUnit lui-même.
+
 ## Anatomie d'une ruche
 
 ```
@@ -79,14 +105,15 @@ com.acme.boutique
 └── application                     racine de composition
 ```
 
-C'est la disposition des conventions par défaut, `ConventionsRuche.parDefaut()`. Pour une base de code organisée
-comme l'implémentation de référence, avec des paquetages en anglais (`domain`, `infrastructure.controller`,
-`infrastructure.inproc`…), déclarez `.conventions(ConventionsRuche.implementationDeReference())`.
+C'est la disposition des conventions françaises, `ConventionsRuche.francaises()`, attendues par défaut en français.
+En anglais, les conventions attendues sont celles de l'implémentation de référence, `ConventionsRuche.anglaises()` :
+`domain`, `domain.api`, `domain.spi`, `infrastructure`, `infrastructure.configuration`,
+`infrastructure.controller` et `infrastructure.inproc`.
 
 Chaque nom de paquetage se configure, par exemple pour la disposition de Mandalore Express :
 
 ```java
-.conventions(ConventionsRuche.implementationDeReference()
+.conventions(ConventionsRuche.anglaises()
         .avecConfiguration("infrastructure.configurations")
         .avecAdaptateursPrimaires("infrastructure.controllers", "infrastructure.listeners")
         .avecAdaptateursIntraprocessus("infrastructure.clients"))
@@ -118,68 +145,70 @@ déclare ce qu'elles vérifient.
 
 ### Hexagone : chaque module
 
-| Règle | Vérifie | Exemples |
-|---|---|---|
-| `LE_DOMAINE_NE_DEPEND_PAS_DE_SON_INFRASTRUCTURE` | le domaine ne dépend pas de son infrastructure | `domaine_depend_de_son_infrastructure` |
-| `LE_DOMAINE_NE_DEPEND_QUE_DE_BIBLIOTHEQUES_PURES` | le domaine ne dépend que du JDK et des bibliothèques déclarées pures (ni Spring, ni JPA, ni Jackson) | `domaine_depend_d_une_bibliotheque_externe` |
-| `LES_PORTS_API_SONT_DES_INTERFACES` | les ports API sont des interfaces | `port_api_est_une_classe` |
-| `LES_PORTS_SPI_SONT_DES_INTERFACES` | les ports SPI sont des interfaces | `port_spi_est_une_classe` |
-| `LES_PORTS_API_SONT_FONCTIONNELS` † | un port API déclare une seule méthode abstraite | `port_api_expose_plusieurs_fonctionnalites` |
-| `LES_PORTS_API_SONT_IMPLEMENTES_PAR_LE_DOMAINE` | un port API n'est implémenté que par le domaine de son module | `port_api_implemente_dans_l_infrastructure`, `port_api_implemente_par_un_autre_module` |
-| `LES_PORTS_SPI_SONT_IMPLEMENTES_PAR_DES_ADAPTATEURS` | un port SPI n'est implémenté que par l'infrastructure de son module, ou par un bouchon de son domaine | `port_spi_implemente_dans_le_domaine`, `port_spi_implemente_par_un_autre_module` |
-| `LES_ADAPTATEURS_PRIMAIRES_N_UTILISENT_QUE_LES_PORTS_API` | un adaptateur primaire n'utilise ni les ports SPI ni les adaptateurs secondaires | `adaptateur_primaire_utilise_un_port_spi`, `adaptateur_primaire_utilise_un_adaptateur_secondaire` |
-| `L_INFRASTRUCTURE_ATTEINT_LES_SERVICES_DU_DOMAINE_PAR_LES_PORTS_API` | hors configuration, l'infrastructure ne dépend pas des services du domaine | `infrastructure_utilise_un_service_du_domaine` |
-| `LES_ADAPTATEURS_SECONDAIRES_NE_RAPPELLENT_PAS_LEUR_DOMAINE` | un adaptateur SPI n'appelle pas l'API de son propre module | `adaptateur_secondaire_appelle_sa_propre_api` |
+| Règle | En anglais | Vérifie | Exemples |
+|---|---|---|---|
+| `LE_DOMAINE_NE_DEPEND_PAS_DE_SON_INFRASTRUCTURE` | `DOMAIN_DOES_NOT_DEPEND_ON_ITS_INFRASTRUCTURE` | le domaine ne dépend pas de son infrastructure | `domaine_depend_de_son_infrastructure` |
+| `LE_DOMAINE_NE_DEPEND_QUE_DE_BIBLIOTHEQUES_PURES` | `DOMAIN_IS_FRAMEWORK_FREE` | le domaine ne dépend que du JDK et des bibliothèques déclarées pures (ni Spring, ni JPA, ni Jackson) | `domaine_depend_d_une_bibliotheque_externe` |
+| `LES_PORTS_API_SONT_DES_INTERFACES` | `API_PORTS_ARE_INTERFACES` | les ports API sont des interfaces | `port_api_est_une_classe` |
+| `LES_PORTS_SPI_SONT_DES_INTERFACES` | `SPI_PORTS_ARE_INTERFACES` | les ports SPI sont des interfaces | `port_spi_est_une_classe` |
+| `LES_PORTS_API_SONT_FONCTIONNELS` † | `API_PORTS_ARE_FUNCTIONAL` | un port API déclare une seule méthode abstraite | `port_api_expose_plusieurs_fonctionnalites` |
+| `LES_PORTS_API_SONT_IMPLEMENTES_PAR_LE_DOMAINE` | `API_PORTS_ARE_IMPLEMENTED_BY_THE_DOMAIN` | un port API n'est implémenté que par le domaine de son module | `port_api_implemente_dans_l_infrastructure`, `port_api_implemente_par_un_autre_module` |
+| `LES_PORTS_SPI_SONT_IMPLEMENTES_PAR_DES_ADAPTATEURS` | `SPI_PORTS_ARE_IMPLEMENTED_BY_ADAPTERS` | un port SPI n'est implémenté que par l'infrastructure de son module, ou par un bouchon de son domaine | `port_spi_implemente_dans_le_domaine`, `port_spi_implemente_par_un_autre_module` |
+| `LES_ADAPTATEURS_PRIMAIRES_N_UTILISENT_QUE_LES_PORTS_API` | `DRIVING_ADAPTERS_ONLY_USE_API_PORTS` | un adaptateur primaire n'utilise ni les ports SPI ni les adaptateurs secondaires | `adaptateur_primaire_utilise_un_port_spi`, `adaptateur_primaire_utilise_un_adaptateur_secondaire` |
+| `L_INFRASTRUCTURE_ATTEINT_LES_SERVICES_DU_DOMAINE_PAR_LES_PORTS_API` | `INFRASTRUCTURE_USES_DOMAIN_SERVICES_THROUGH_API_PORTS` | hors configuration, l'infrastructure ne dépend pas des services du domaine | `infrastructure_utilise_un_service_du_domaine` |
+| `LES_ADAPTATEURS_SECONDAIRES_NE_RAPPELLENT_PAS_LEUR_DOMAINE` | `DRIVEN_ADAPTERS_DO_NOT_CALL_BACK_INTO_THEIR_DOMAIN` | un adaptateur SPI n'appelle pas l'API de son propre module | `adaptateur_secondaire_appelle_sa_propre_api` |
 
 ### Ruche : entre les modules
 
-| Règle | Vérifie | Exemples |
-|---|---|---|
-| `LES_DOMAINES_SONT_ISOLES` | le domaine d'un module ne dépend d'aucun autre module | `domaine_depend_du_domaine_d_un_autre_module`, `domaine_depend_de_l_infrastructure_d_un_autre_module` |
-| `LES_INFRASTRUCTURES_SONT_ISOLEES` | l'infrastructure d'un module ne dépend pas de celle d'un autre | `infrastructure_depend_de_l_infrastructure_d_un_autre_module` |
-| `LES_AUTRES_MODULES_SONT_ATTEINTS_PAR_LEUR_API` | un autre module n'est atteint que par ses ports API et le modèle qu'ils exposent, jamais par ses ports SPI, ses services ou ses bouchons | `adaptateur_intraprocessus_utilise_la_spi_d_un_autre_module`, `…_un_service_du_domaine_d_un_autre_module`, `…_un_bouchon_d_un_autre_module` |
-| `SEULS_LES_ADAPTATEURS_INTRAPROCESSUS_ATTEIGNENT_LES_AUTRES_MODULES` | seuls les adaptateurs intraprocessus dépendent d'un autre module | `adaptateur_primaire_appelle_un_autre_module` |
-| `LES_ADAPTATEURS_INTRAPROCESSUS_IMPLEMENTENT_UN_PORT_SPI` | un adaptateur intraprocessus qui appelle l'API d'un autre module implémente un port SPI de son propre module | `adaptateur_intraprocessus_sans_port_spi` |
-| `LES_DONNEES_SONT_CLOISONNEES` | aucune table n'est mappée par deux modules (`@Entity`/`@Table` JPA, `@Table` Spring Data ; schéma pris en compte) | `deux_modules_mappent_la_meme_table`, `deux_modules_mappent_la_meme_table_implicite` |
+| Règle | En anglais | Vérifie | Exemples |
+|---|---|---|---|
+| `LES_DOMAINES_SONT_ISOLES` | `DOMAINS_ARE_ISOLATED` | le domaine d'un module ne dépend d'aucun autre module | `domaine_depend_du_domaine_d_un_autre_module`, `domaine_depend_de_l_infrastructure_d_un_autre_module` |
+| `LES_INFRASTRUCTURES_SONT_ISOLEES` | `INFRASTRUCTURES_ARE_ISOLATED` | l'infrastructure d'un module ne dépend pas de celle d'un autre | `infrastructure_depend_de_l_infrastructure_d_un_autre_module` |
+| `LES_AUTRES_MODULES_SONT_ATTEINTS_PAR_LEUR_API` | `OTHER_MODULES_ARE_REACHED_THROUGH_THEIR_API` | un autre module n'est atteint que par ses ports API et le modèle qu'ils exposent, jamais par ses ports SPI, ses services ou ses bouchons | `adaptateur_intraprocessus_utilise_la_spi_d_un_autre_module`, `…_un_service_du_domaine_d_un_autre_module`, `…_un_bouchon_d_un_autre_module` |
+| `SEULS_LES_ADAPTATEURS_INTRAPROCESSUS_ATTEIGNENT_LES_AUTRES_MODULES` | `ONLY_IN_PROCESS_ADAPTERS_REACH_OTHER_MODULES` | seuls les adaptateurs intraprocessus dépendent d'un autre module | `adaptateur_primaire_appelle_un_autre_module` |
+| `LES_ADAPTATEURS_INTRAPROCESSUS_IMPLEMENTENT_UN_PORT_SPI` | `IN_PROCESS_ADAPTERS_IMPLEMENT_AN_SPI_PORT` | un adaptateur intraprocessus qui appelle l'API d'un autre module implémente un port SPI de son propre module | `adaptateur_intraprocessus_sans_port_spi` |
+| `LES_DONNEES_SONT_CLOISONNEES` | `DATASTORES_ARE_SEGREGATED` | aucune table n'est mappée par deux modules (`@Entity`/`@Table` JPA, `@Table` Spring Data ; schéma pris en compte) | `deux_modules_mappent_la_meme_table`, `deux_modules_mappent_la_meme_table_implicite` |
 
 ### Zones partagées
 
-| Règle | Vérifie | Exemples |
-|---|---|---|
-| `LES_NOYAUX_PARTAGES_SONT_PURS` † | un noyau partagé ne dépend que du JDK, des bibliothèques pures, d'autres noyaux partagés et des annotations | `noyau_partage_depend_d_une_bibliotheque_externe`, `noyau_partage_depend_d_un_module` |
-| `LES_ANNOTATIONS_SONT_PURES` † | les annotations ne dépendent que du JDK et des bibliothèques pures (pas de `@Component` méta-annoté) | `annotations_dependent_d_une_bibliotheque_externe` |
-| `LES_MODULES_TECHNIQUES_IGNORENT_LE_METIER` † | un module technique ne dépend d'aucun module de la ruche | `module_technique_depend_d_un_module` |
-| `LES_DOMAINES_NE_DEPENDENT_PAS_DES_MODULES_TECHNIQUES` † | un domaine ne dépend d'aucun module technique | `domaine_depend_d_un_module_technique` |
-| `RIEN_NE_DEPEND_DE_LA_RACINE_DE_COMPOSITION` † | rien ne dépend d'une racine de composition | `module_depend_de_la_racine_de_composition` |
-| `LA_RACINE_DE_COMPOSITION_N_ATTEINT_PAS_LES_DOMAINES` † | une racine de composition ne dépend d'aucun domaine : chaque module câble le sien | `racine_de_composition_atteint_un_domaine` |
+| Règle | En anglais | Vérifie | Exemples |
+|---|---|---|---|
+| `LES_NOYAUX_PARTAGES_SONT_PURS` † | `SHARED_KERNELS_ARE_PURE` | un noyau partagé ne dépend que du JDK, des bibliothèques pures, d'autres noyaux partagés et des annotations | `noyau_partage_depend_d_une_bibliotheque_externe`, `noyau_partage_depend_d_un_module` |
+| `LES_ANNOTATIONS_SONT_PURES` † | `ANNOTATIONS_ARE_PURE` | les annotations ne dépendent que du JDK et des bibliothèques pures (pas de `@Component` méta-annoté) | `annotations_dependent_d_une_bibliotheque_externe` |
+| `LES_MODULES_TECHNIQUES_IGNORENT_LE_METIER` † | `TECHNICAL_MODULES_ARE_DOMAIN_AGNOSTIC` | un module technique ne dépend d'aucun module de la ruche | `module_technique_depend_d_un_module` |
+| `LES_DOMAINES_NE_DEPENDENT_PAS_DES_MODULES_TECHNIQUES` † | `DOMAINS_DO_NOT_DEPEND_ON_TECHNICAL_MODULES` | un domaine ne dépend d'aucun module technique | `domaine_depend_d_un_module_technique` |
+| `RIEN_NE_DEPEND_DE_LA_RACINE_DE_COMPOSITION` † | `NOTHING_DEPENDS_ON_THE_COMPOSITION_ROOT` | rien ne dépend d'une racine de composition | `module_depend_de_la_racine_de_composition` |
+| `LA_RACINE_DE_COMPOSITION_N_ATTEINT_PAS_LES_DOMAINES` † | `COMPOSITION_ROOT_DOES_NOT_REACH_INTO_DOMAINS` | une racine de composition ne dépend d'aucun domaine : chaque module câble le sien | `racine_de_composition_atteint_un_domaine` |
 
 ### Structure
 
-| Règle | Vérifie | Exemples |
-|---|---|---|
-| `CHAQUE_MODULE_A_SA_PROPRE_CONFIGURATION` | chaque module a au moins une classe dans son paquetage de configuration | `module_sans_configuration` |
-| `LES_MODULES_SE_DIVISENT_EN_DOMAINE_ET_INFRASTRUCTURE` | toute classe d'un module est dans son domaine ou son infrastructure (`package-info` excepté) | `classe_hors_du_domaine_et_de_l_infrastructure` |
-| `CHAQUE_CLASSE_APPARTIENT_A_UNE_ZONE_DECLAREE` † | toute classe du paquetage de base appartient à une zone déclarée | `module_non_declare`, `module_non_declare_sous_une_racine_de_composition` |
+| Règle | En anglais | Vérifie | Exemples |
+|---|---|---|---|
+| `CHAQUE_MODULE_A_SA_PROPRE_CONFIGURATION` | `EVERY_MODULE_HAS_ITS_OWN_CONFIGURATION` | chaque module a au moins une classe dans son paquetage de configuration | `module_sans_configuration` |
+| `LES_MODULES_SE_DIVISENT_EN_DOMAINE_ET_INFRASTRUCTURE` | `MODULES_ARE_SPLIT_INTO_DOMAIN_AND_INFRASTRUCTURE` | toute classe d'un module est dans son domaine ou son infrastructure (`package-info` excepté) | `classe_hors_du_domaine_et_de_l_infrastructure` |
+| `CHAQUE_CLASSE_APPARTIENT_A_UNE_ZONE_DECLAREE` † | `EVERY_CLASS_BELONGS_TO_A_DECLARED_ZONE` | toute classe du paquetage de base appartient à une zone déclarée | `module_non_declare`, `module_non_declare_sous_une_racine_de_composition` |
 
 ### Annotations
 
-| Règle | Vérifie | Exemples |
-|---|---|---|
-| `LES_SERVICES_DU_DOMAINE_SONT_ANNOTES` † | un service du domaine qui implémente un port API porte l'annotation de service | `service_du_domaine_non_annote` |
-| `L_ANNOTATION_DE_SERVICE_EST_RESERVEE_AUX_SERVICES_DU_DOMAINE` † | l'annotation de service ne s'applique qu'à une classe du domaine qui implémente un de ses ports API | `annotation_de_service_dans_l_infrastructure`, `annotation_de_service_sans_port_api` |
-| `LES_BOUCHONS_IMPLEMENTENT_UN_PORT_SPI_DU_DOMAINE` † | l'annotation de bouchon ne s'applique qu'à une classe du domaine qui implémente un de ses ports SPI | `bouchon_hors_du_domaine`, `bouchon_sans_port_spi` |
+| Règle | En anglais | Vérifie | Exemples |
+|---|---|---|---|
+| `LES_SERVICES_DU_DOMAINE_SONT_ANNOTES` † | `DOMAIN_SERVICES_ARE_ANNOTATED` | un service du domaine qui implémente un port API porte l'annotation de service | `service_du_domaine_non_annote` |
+| `L_ANNOTATION_DE_SERVICE_EST_RESERVEE_AUX_SERVICES_DU_DOMAINE` † | `DOMAIN_SERVICE_ANNOTATION_IS_RESERVED_TO_DOMAIN_SERVICES` | l'annotation de service ne s'applique qu'à une classe du domaine qui implémente un de ses ports API | `annotation_de_service_dans_l_infrastructure`, `annotation_de_service_sans_port_api` |
+| `LES_BOUCHONS_IMPLEMENTENT_UN_PORT_SPI_DU_DOMAINE` † | `STUBS_ARE_SPI_IMPLEMENTATIONS_IN_THE_DOMAIN` | l'annotation de bouchon ne s'applique qu'à une classe du domaine qui implémente un de ses ports SPI | `bouchon_hors_du_domaine`, `bouchon_sans_port_spi` |
 
 ## Comment les tests prouvent les règles
 
-- **Deux ruches conformes** respectent chacune des règles applicables :
-  - `exemples/valide` suit les conventions par défaut et exerce les 28 règles : adaptateur intraprocessus, client vers
-    un module extrait, bouchon, tables homonymes dans des schémas différents, `package-info` annotés ;
+- **Trois ruches conformes** respectent chacune des règles applicables :
+  - `exemples/valide` suit les conventions françaises et exerce les 28 règles : adaptateur intraprocessus, client
+    vers un module extrait, bouchon, tables homonymes dans des schémas différents, `package-info` annotés ;
   - `exemples/conventions_alternatives` suit la disposition de Mandalore Express (paquetages au pluriel), avec une
-    racine de composition parente des modules.
-- **39 ruches non conformes** dans `exemples/violations`, une par cas d'usage. Pour chacune, les tests vérifient trois
-  choses :
+    racine de composition parente des modules ;
+  - `exemples/disposition_anglaise` a des paquetages anglais (`domain`, `controller`, `inproc`) et se vérifie en
+    anglais sans déclarer de conventions.
+- **39 ruches non conformes** dans `exemples/violations`, une par cas d'usage, vérifiées dans chaque langue. Pour
+  chacune, les tests vérifient trois choses :
   - elle enfreint *exactement* les règles attendues : aucune règle muette, aucun faux positif ;
-  - le rapport de chaque règle nomme la classe fautive ;
+  - le rapport de chaque règle commence par son identifiant dans la langue et nomme la classe fautive ;
   - chaque règle est enfreinte par au moins un exemple, et chaque exemple du dossier est référencé.
 - `ExempleArchitectureRucheTest` exécute l'exemple ci-dessus avec le moteur JUnit d'ArchUnit.
 

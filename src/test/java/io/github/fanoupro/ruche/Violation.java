@@ -136,6 +136,10 @@ record Violation(String exemple, Disposition disposition, Set<RegleRuche> regles
         return disposition.ruche(paquetageDeBase());
     }
 
+    Ruche ruche(Langue langue) {
+        return disposition.ruche(paquetageDeBase(), langue);
+    }
+
     JavaClasses classes() {
         return disposition.classes(paquetageDeBase());
     }

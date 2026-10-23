@@ -111,6 +111,54 @@ class ReglesRucheTest {
                 .evaluate(classes).hasViolation()).isFalse();
     }
 
+    @Test
+    void en_anglais_une_regle_s_explique_par_son_identifiant_et_sa_justification_anglais() {
+        ReglesRuche regles = ReglesRuche.de(Ruche.nouvelle().langue(Langue.ANGLAIS).module("com.acme.commande")
+                .construire());
+
+        assertThat(regles.regle(LES_DOMAINES_SONT_ISOLES).getDescription())
+                .isEqualTo("[DOMAINS_ARE_ISOLATED] the domain of a module never depends on another module, "
+                        + "because each module must stay extractable as a standalone service");
+    }
+
+    @Test
+    void en_anglais_demander_une_regle_que_la_ruche_ne_peut_pas_verifier_echoue() {
+        ReglesRuche regles = ReglesRuche.de(Ruche.nouvelle().langue(Langue.ANGLAIS).module("com.acme.commande")
+                .construire());
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> regles.regle(LES_BOUCHONS_IMPLEMENTENT_UN_PORT_SPI_DU_DOMAINE))
+                .withMessage("STUBS_ARE_SPI_IMPLEMENTATIONS_IN_THE_DOMAIN does not apply: declare what it checks in "
+                        + "the Hive first");
+    }
+
+    @Test
+    void en_anglais_toutes_les_regles_ensemble_etiquettent_chaque_violation_avec_l_identifiant_anglais() {
+        Violation violation = violation("port_api_implemente_par_un_autre_module");
+        String preneurDeCommande = "<" + violation.paquetageDeBase() + ".catalogue.domaine.PreneurDeCommande>";
+        String passerCommande = "<" + violation.paquetageDeBase() + ".commande.domaine.api.PasserCommande>";
+
+        assertThat(ReglesRuche.de(violation.ruche(Langue.ANGLAIS)).toutes().evaluate(violation.classes())
+                .getFailureReport().toString())
+                .contains("Rule 'classes follow the Hive pattern (28 rules)' was violated (2 times)")
+                .contains("[API_PORTS_ARE_IMPLEMENTED_BY_THE_DOMAIN] Class " + preneurDeCommande
+                        + " in module 'catalogue' domain implements " + passerCommande + " of module 'commande' API")
+                .contains("[DOMAINS_ARE_ISOLATED] module 'catalogue' domain -> module 'commande' API: Class "
+                        + preneurDeCommande + " implements interface " + passerCommande);
+    }
+
+    @Test
+    void en_anglais_une_table_partagee_est_signalee_avec_chaque_module_qui_la_mappe() {
+        Violation violation = violation("deux_modules_mappent_la_meme_table");
+
+        assertThat(ReglesRuche.de(violation.ruche(Langue.ANGLAIS)).regle(LES_DONNEES_SONT_CLOISONNEES)
+                .evaluate(violation.classes()).getFailureReport().getDetails())
+                .containsExactly("[DATASTORES_ARE_SEGREGATED] Table 'produit' is mapped by module 'catalogue' ["
+                        + violation.paquetageDeBase() + ".catalogue.infrastructure.persistance.EntiteProduit] and "
+                        + "module 'commande' [" + violation.paquetageDeBase()
+                        + ".commande.infrastructure.persistance.EntiteLigneProduit]");
+    }
+
     private static Violation violation(String exemple) {
         return Violation.toutes()
                 .filter(violation -> violation.toString().equals(exemple))

@@ -9,7 +9,7 @@ import static java.util.Objects.requireNonNull;
 /**
  * Disposition des paquetages de chaque module de la ruche, relativement au paquetage racine du module.
  * <p>
- * Les conventions {@linkplain #parDefaut() par défaut} reprennent la disposition de l'implémentation de référence du
+ * Les conventions {@linkplain #francaises() françaises} reprennent la disposition de l'implémentation de référence du
  * pattern Hive, avec des paquetages nommés en français :
  * <pre>
  * commande
@@ -21,8 +21,8 @@ import static java.util.Objects.requireNonNull;
  *     ├── controleur          adaptateurs primaires
  *     └── intraprocessus      adaptateurs qui appellent en mémoire les ports API d'autres modules
  * </pre>
- * Les conventions de l'{@linkplain #implementationDeReference() implémentation de référence} gardent ses noms de
- * paquetages anglais.
+ * Les conventions {@linkplain #anglaises() anglaises} sont celles de l'implémentation de référence elle-même. Une
+ * ruche attend par défaut les conventions de sa {@linkplain #pour(Langue) langue}.
  *
  * @param domaine                   l'hexagone
  * @param api                       ports API, dans le domaine
@@ -63,7 +63,21 @@ public record ConventionsRuche(
                 exigerSousPaquetage(adaptateurs, infrastructure, "paquetage d'adaptateurs intraprocessus"));
     }
 
-    public static ConventionsRuche parDefaut() {
+    /**
+     * Les conventions par défaut d'une ruche vérifiée dans cette langue.
+     */
+    public static ConventionsRuche pour(Langue langue) {
+        return switch (langue) {
+            case FRANCAIS -> francaises();
+            case ANGLAIS -> anglaises();
+        };
+    }
+
+    /**
+     * Les conventions de l'implémentation de référence, avec des paquetages nommés en français :
+     * {@code domaine}, {@code infrastructure.controleur}, {@code infrastructure.intraprocessus}…
+     */
+    public static ConventionsRuche francaises() {
         return new ConventionsRuche(
                 "domaine",
                 "domaine.api",
@@ -80,7 +94,7 @@ public record ConventionsRuche(
      * les paquetages sont nommés en anglais : {@code domain}, {@code infrastructure.controller},
      * {@code infrastructure.inproc}…
      */
-    public static ConventionsRuche implementationDeReference() {
+    public static ConventionsRuche anglaises() {
         return new ConventionsRuche(
                 "domain",
                 "domain.api",

@@ -18,23 +18,29 @@ import static io.github.fanoupro.ruche.Paquetages.relatifA;
 final class TopologieRuche {
 
     enum TypeDeZone {
-        MODULE("module", "modules"),
-        NOYAU_PARTAGE("noyau partagé", "noyaux partagés"),
-        ANNOTATIONS("annotations", "annotations"),
-        MODULE_TECHNIQUE("module technique", "modules techniques"),
-        RACINE_DE_COMPOSITION("racine de composition", "racines de composition");
+        MODULE("modules"),
+        NOYAU_PARTAGE("noyaux partagés"),
+        ANNOTATIONS("annotations"),
+        MODULE_TECHNIQUE("modules techniques"),
+        RACINE_DE_COMPOSITION("racines de composition");
 
-        private final String libelle;
         private final String pluriel;
 
-        TypeDeZone(String libelle, String pluriel) {
-            this.libelle = libelle;
+        TypeDeZone(String pluriel) {
             this.pluriel = pluriel;
         }
 
         String pluriel() {
             return pluriel;
         }
+    }
+
+    enum Couche {
+        API,
+        SPI,
+        DOMAINE,
+        INFRASTRUCTURE,
+        HORS_DU_DOMAINE_ET_DE_L_INFRASTRUCTURE
     }
 
     record Zone(TypeDeZone type, String paquetage, ModuleRuche module, boolean couvreLesSousPaquetages) {
@@ -48,12 +54,14 @@ final class TopologieRuche {
 
     private final Ruche ruche;
     private final ConventionsRuche conventions;
+    private final Textes textes;
     private final List<Zone> zonesDeLaPlusSpecifique;
     private final List<PackageMatcher> bibliothequesPures;
 
     TopologieRuche(Ruche ruche) {
         this.ruche = ruche;
         this.conventions = ruche.conventions();
+        this.textes = ruche.langue().textes();
         this.zonesDeLaPlusSpecifique = zonesDe(ruche);
         this.bibliothequesPures = ruche.bibliothequesPures().stream().map(PackageMatcher::of).toList();
     }
@@ -186,27 +194,27 @@ final class TopologieRuche {
         JavaClass type = classe.getBaseComponentType();
         Optional<Zone> zone = zoneDe(type);
         if (zone.isEmpty()) {
-            return estPure(type) ? "bibliothèque pure" : "paquetage externe '" + type.getPackageName() + "'";
+            return estPure(type) ? textes.bibliothequePure() : textes.paquetageExterne(type.getPackageName());
         }
         if (zone.get().type() != TypeDeZone.MODULE) {
-            return zone.get().type().libelle + " '" + zone.get().paquetage() + "'";
+            return textes.zone(zone.get().type(), zone.get().paquetage());
         }
-        return coucheDe(type) + " du module '" + zone.get().module().nom() + "'";
+        return textes.couche(coucheDe(type), zone.get().module().nom());
     }
 
-    private String coucheDe(JavaClass classe) {
+    private Couche coucheDe(JavaClass classe) {
         if (estDansLApi(classe)) {
-            return "API";
+            return Couche.API;
         }
         if (estDansLaSpi(classe)) {
-            return "SPI";
+            return Couche.SPI;
         }
         if (estDansLeDomaine(classe)) {
-            return "domaine";
+            return Couche.DOMAINE;
         }
         if (estDansLInfrastructure(classe)) {
-            return "infrastructure";
+            return Couche.INFRASTRUCTURE;
         }
-        return "hors du domaine et de l'infrastructure";
+        return Couche.HORS_DU_DOMAINE_ET_DE_L_INFRASTRUCTURE;
     }
 }

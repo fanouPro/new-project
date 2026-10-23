@@ -12,18 +12,21 @@ final class Exemples {
     }
 
     /**
-     * Comment un exemple est organisé, et donc déclaré.
+     * Comment un exemple est organisé, et donc déclaré. Ses paquetages sont nommés en français : la langue de la
+     * vérification ne change que ses textes.
      */
     enum Disposition {
         /**
          * Disposition de l'implémentation de référence (gitlab.com/beyondxscratch/hive-pattern), avec les conventions
-         * par défaut : modules {@code commande} et {@code catalogue}, noyau partagé {@code monnaie}, module technique
+         * françaises : modules {@code commande} et {@code catalogue}, noyau partagé {@code monnaie}, module technique
          * {@code hypermedia}, racine de composition {@code appli}, et toutes les règles facultatives activées.
          */
         STANDARD {
             @Override
-            Ruche ruche(String paquetageDeBase) {
+            Ruche ruche(String paquetageDeBase, Langue langue) {
                 return Ruche.nouvelle()
+                        .langue(langue)
+                        .conventions(ConventionsRuche.francaises())
                         .module(paquetageDeBase + ".commande")
                         .module(paquetageDeBase + ".catalogue")
                         .noyauPartage(paquetageDeBase + ".monnaie")
@@ -49,13 +52,14 @@ final class Exemples {
          */
         ALTERNATIVE {
             @Override
-            Ruche ruche(String paquetageDeBase) {
+            Ruche ruche(String paquetageDeBase, Langue langue) {
                 return Ruche.nouvelle()
+                        .langue(langue)
                         .module(paquetageDeBase + ".reservation")
                         .module(paquetageDeBase + ".recherche")
                         .racineDeComposition(paquetageDeBase)
                         .paquetageDeBase(paquetageDeBase)
-                        .conventions(ConventionsRuche.parDefaut()
+                        .conventions(ConventionsRuche.francaises()
                                 .avecConfiguration("infrastructure.configurations")
                                 .avecAdaptateursPrimaires("infrastructure.controleurs")
                                 .avecAdaptateursIntraprocessus("infrastructure.clients"))
@@ -68,7 +72,11 @@ final class Exemples {
             }
         };
 
-        abstract Ruche ruche(String paquetageDeBase);
+        abstract Ruche ruche(String paquetageDeBase, Langue langue);
+
+        Ruche ruche(String paquetageDeBase) {
+            return ruche(paquetageDeBase, Langue.FRANCAIS);
+        }
 
         abstract JavaClasses classes(String paquetageDeBase);
     }

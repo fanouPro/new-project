@@ -39,12 +39,15 @@ public final class Ruche {
     private final List<String> racinesDeComposition;
     private final Optional<String> paquetageDeBase;
     private final List<String> bibliothequesPures;
+    private final Langue langue;
     private final ConventionsRuche conventions;
     private final Optional<String> annotationServiceDuDomaine;
     private final Optional<String> annotationBouchon;
     private final boolean portsApiFonctionnels;
 
     private Ruche(Monteur monteur) {
+        this.langue = monteur.langue != null ? monteur.langue : Langue.configuree();
+        this.conventions = monteur.conventions != null ? monteur.conventions : ConventionsRuche.pour(langue);
         this.modules = List.copyOf(monteur.modules);
         this.noyauxPartages = List.copyOf(monteur.noyauxPartages);
         this.annotations = List.copyOf(monteur.annotations);
@@ -52,7 +55,6 @@ public final class Ruche {
         this.racinesDeComposition = List.copyOf(monteur.racinesDeComposition);
         this.paquetageDeBase = Optional.ofNullable(monteur.paquetageDeBase);
         this.bibliothequesPures = List.copyOf(monteur.bibliothequesPures);
-        this.conventions = monteur.conventions;
         this.annotationServiceDuDomaine = Optional.ofNullable(monteur.annotationServiceDuDomaine);
         this.annotationBouchon = Optional.ofNullable(monteur.annotationBouchon);
         this.portsApiFonctionnels = monteur.portsApiFonctionnels;
@@ -94,6 +96,16 @@ public final class Ruche {
         return bibliothequesPures;
     }
 
+    /**
+     * La langue de la vérification : celle déclarée, sinon celle de la configuration ArchUnit, sinon le français.
+     */
+    public Langue langue() {
+        return langue;
+    }
+
+    /**
+     * Les conventions déclarées, sinon celles de la {@linkplain #langue() langue} de la ruche.
+     */
     public ConventionsRuche conventions() {
         return conventions;
     }
@@ -119,7 +131,8 @@ public final class Ruche {
         private final List<String> racinesDeComposition = new ArrayList<>();
         private final List<String> bibliothequesPures = new ArrayList<>(List.of("java.."));
         private String paquetageDeBase;
-        private ConventionsRuche conventions = ConventionsRuche.parDefaut();
+        private Langue langue;
+        private ConventionsRuche conventions;
         private String annotationServiceDuDomaine;
         private String annotationBouchon;
         private boolean portsApiFonctionnels;
@@ -197,6 +210,20 @@ public final class Ruche {
             return this;
         }
 
+        /**
+         * Déclare la langue de la vérification : celle des identifiants des règles, de leurs descriptions et des
+         * messages de violation. Sans cette déclaration, la langue est celle de la propriété {@value Langue#PROPRIETE}
+         * de la configuration ArchUnit, sinon le français. La langue choisit aussi les conventions de paquetages
+         * attendues, sauf si des {@linkplain #conventions(ConventionsRuche) conventions} sont déclarées.
+         */
+        public Monteur langue(Langue langue) {
+            this.langue = requireNonNull(langue, "langue");
+            return this;
+        }
+
+        /**
+         * Déclare la disposition des paquetages des modules, à la place des conventions de la langue.
+         */
         public Monteur conventions(ConventionsRuche conventions) {
             this.conventions = requireNonNull(conventions, "conventions");
             return this;

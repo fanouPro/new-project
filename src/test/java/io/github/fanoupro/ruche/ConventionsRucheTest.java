@@ -10,22 +10,28 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 class ConventionsRucheTest {
 
     @Test
-    void les_conventions_par_defaut_traduisent_l_implementation_de_reference() {
-        assertThat(ConventionsRuche.parDefaut()).isEqualTo(new ConventionsRuche(
+    void les_conventions_francaises_traduisent_l_implementation_de_reference() {
+        assertThat(ConventionsRuche.francaises()).isEqualTo(new ConventionsRuche(
                 "domaine", "domaine.api", "domaine.spi", "infrastructure", "infrastructure.configuration",
                 List.of("infrastructure.controleur"), List.of("infrastructure.intraprocessus")));
     }
 
     @Test
-    void les_conventions_de_l_implementation_de_reference_gardent_ses_noms_anglais() {
-        assertThat(ConventionsRuche.implementationDeReference()).isEqualTo(new ConventionsRuche(
+    void les_conventions_anglaises_sont_celles_de_l_implementation_de_reference() {
+        assertThat(ConventionsRuche.anglaises()).isEqualTo(new ConventionsRuche(
                 "domain", "domain.api", "domain.spi", "infrastructure", "infrastructure.configuration",
                 List.of("infrastructure.controller"), List.of("infrastructure.inproc")));
     }
 
     @Test
+    void chaque_langue_a_ses_conventions() {
+        assertThat(ConventionsRuche.pour(Langue.FRANCAIS)).isEqualTo(ConventionsRuche.francaises());
+        assertThat(ConventionsRuche.pour(Langue.ANGLAIS)).isEqualTo(ConventionsRuche.anglaises());
+    }
+
+    @Test
     void les_paquetages_des_adaptateurs_peuvent_etre_renommes() {
-        ConventionsRuche conventions = ConventionsRuche.parDefaut()
+        ConventionsRuche conventions = ConventionsRuche.francaises()
                 .avecConfiguration("infrastructure.configurations")
                 .avecAdaptateursPrimaires("infrastructure.controleurs", "infrastructure.consommateurs")
                 .avecAdaptateursIntraprocessus("infrastructure.clients");
@@ -55,7 +61,7 @@ class ConventionsRucheTest {
     @Test
     void les_adaptateurs_appartiennent_a_l_infrastructure() {
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> ConventionsRuche.parDefaut().avecAdaptateursIntraprocessus("domaine.intraprocessus"))
+                .isThrownBy(() -> ConventionsRuche.francaises().avecAdaptateursIntraprocessus("domaine.intraprocessus"))
                 .withMessage("Le paquetage d'adaptateurs intraprocessus 'domaine.intraprocessus' doit être un "
                         + "sous-paquetage de 'infrastructure'");
     }

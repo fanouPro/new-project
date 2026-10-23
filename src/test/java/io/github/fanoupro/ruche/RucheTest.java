@@ -1,5 +1,7 @@
 package io.github.fanoupro.ruche;
 
+import com.tngtech.archunit.ArchConfiguration;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -7,6 +9,11 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 class RucheTest {
+
+    @AfterEach
+    void oublier_la_configuration() {
+        ArchConfiguration.get().reset();
+    }
 
     @Test
     void un_module_porte_par_defaut_le_nom_de_son_paquetage() {
@@ -87,5 +94,52 @@ class RucheTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> Ruche.nouvelle().module("com.acme..commande"))
                 .withMessage("Le paquetage de module 'com.acme..commande' est invalide");
+    }
+
+    @Test
+    void sans_declaration_une_ruche_est_verifiee_en_francais_avec_les_conventions_francaises() {
+        Ruche ruche = Ruche.nouvelle().module("com.acme.boutique.commande").construire();
+
+        assertThat(ruche.langue()).isEqualTo(Langue.FRANCAIS);
+        assertThat(ruche.conventions()).isEqualTo(ConventionsRuche.francaises());
+    }
+
+    @Test
+    void une_ruche_verifiee_en_anglais_attend_les_conventions_anglaises() {
+        Ruche ruche = Ruche.nouvelle().langue(Langue.ANGLAIS).module("com.acme.boutique.commande").construire();
+
+        assertThat(ruche.langue()).isEqualTo(Langue.ANGLAIS);
+        assertThat(ruche.conventions()).isEqualTo(ConventionsRuche.anglaises());
+    }
+
+    @Test
+    void des_conventions_declarees_l_emportent_sur_celles_de_la_langue() {
+        Ruche ruche = Ruche.nouvelle()
+                .langue(Langue.ANGLAIS)
+                .conventions(ConventionsRuche.francaises())
+                .module("com.acme.boutique.commande")
+                .construire();
+
+        assertThat(ruche.langue()).isEqualTo(Langue.ANGLAIS);
+        assertThat(ruche.conventions()).isEqualTo(ConventionsRuche.francaises());
+    }
+
+    @Test
+    void la_configuration_archunit_choisit_la_langue_d_une_ruche() {
+        ArchConfiguration.get().setProperty(Langue.PROPRIETE, "en");
+
+        Ruche ruche = Ruche.nouvelle().module("com.acme.boutique.commande").construire();
+
+        assertThat(ruche.langue()).isEqualTo(Langue.ANGLAIS);
+        assertThat(ruche.conventions()).isEqualTo(ConventionsRuche.anglaises());
+    }
+
+    @Test
+    void la_langue_declaree_l_emporte_sur_la_configuration_archunit() {
+        ArchConfiguration.get().setProperty(Langue.PROPRIETE, "en");
+
+        Ruche ruche = Ruche.nouvelle().langue(Langue.FRANCAIS).module("com.acme.boutique.commande").construire();
+
+        assertThat(ruche.langue()).isEqualTo(Langue.FRANCAIS);
     }
 }

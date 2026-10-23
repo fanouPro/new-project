@@ -5,8 +5,10 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -19,15 +21,16 @@ class ViolationTest {
 
     private static final String VIOLATIONS = Exemples.paquetageDe("violations");
 
-    static Stream<Violation> violations() {
-        return Violation.toutes();
+    static Stream<Arguments> violationsDansChaqueLangue() {
+        return Violation.toutes().flatMap(violation -> Arrays.stream(Langue.values())
+                .map(langue -> Arguments.of(violation, langue)));
     }
 
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("violations")
-    void une_violation_enfreint_exactement_les_regles_attendues(Violation violation) {
+    @ParameterizedTest(name = "{0} ({1})")
+    @MethodSource("violationsDansChaqueLangue")
+    void une_violation_enfreint_exactement_les_regles_attendues(Violation violation, Langue langue) {
         JavaClasses classes = violation.classes();
-        ReglesRuche regles = ReglesRuche.de(violation.ruche());
+        ReglesRuche regles = ReglesRuche.de(violation.ruche(langue));
 
         Set<RegleRuche> reglesEnfreintes = regles.applicables().stream()
                 .filter(regle -> regles.regle(regle).evaluate(classes).hasViolation())
@@ -36,15 +39,17 @@ class ViolationTest {
         assertThat(reglesEnfreintes).isEqualTo(violation.reglesEnfreintes());
     }
 
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("violations")
-    void le_rapport_d_une_violation_nomme_le_fautif(Violation violation) {
+    @ParameterizedTest(name = "{0} ({1})")
+    @MethodSource("violationsDansChaqueLangue")
+    void le_rapport_d_une_violation_nomme_la_regle_et_le_fautif(Violation violation, Langue langue) {
         JavaClasses classes = violation.classes();
-        ReglesRuche regles = ReglesRuche.de(violation.ruche());
+        ReglesRuche regles = ReglesRuche.de(violation.ruche(langue));
 
         for (RegleRuche regle : violation.reglesEnfreintes()) {
             assertThat(regles.regle(regle).evaluate(classes).getFailureReport().getDetails())
                     .as("rapport de %s", regle)
+                    .isNotEmpty()
+                    .allMatch(detail -> detail.startsWith("[" + regle.identifiant(langue) + "] "))
                     .anyMatch(detail -> detail.contains(violation.fautifQualifie()));
         }
     }

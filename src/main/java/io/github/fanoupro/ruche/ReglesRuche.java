@@ -28,7 +28,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
-import static java.util.stream.Collectors.joining;
 
 /**
  * Les règles ArchUnit du pattern Hive, pour une {@link Ruche} donnée.
@@ -40,6 +39,7 @@ import static java.util.stream.Collectors.joining;
  *     static final ArchRule ruche = ReglesRuche.de(RUCHE).toutes();
  * }
  * }</pre>
+ * Les règles sont décrites et signalent leurs violations dans la {@linkplain Ruche#langue() langue} de la ruche.
  * Les règles qui dépendent d'une déclaration facultative (noyaux partagés, annotations, modules techniques, racines de
  * composition, paquetage de base, annotations de service du domaine et de bouchon, ports API fonctionnels) ne
  * s'appliquent que si elle est faite.
@@ -51,16 +51,21 @@ public final class ReglesRuche {
     private static final String TABLE_SPRING_DATA = "org.springframework.data.relational.core.mapping.Table";
 
     private final Ruche ruche;
+    private final Langue langue;
+    private final Textes textes;
     private final TopologieRuche topologie;
     private final Map<RegleRuche, ArchRule> regles = new EnumMap<>(RegleRuche.class);
 
     private ReglesRuche(Ruche ruche) {
         this.ruche = ruche;
+        this.langue = ruche.langue();
+        this.textes = langue.textes();
         this.topologie = new TopologieRuche(ruche);
         for (RegleRuche regle : RegleRuche.values()) {
             if (sAppliqueA(regle)) {
                 regles.put(regle, creer(regle)
-                        .as("[" + regle.name() + "] " + regle.description() + ", car " + regle.justification())
+                        .as(textes.regle(regle.identifiant(langue), regle.description(langue),
+                                regle.justification(langue)))
                         .allowEmptyShould(true));
             }
         }
@@ -80,8 +85,7 @@ public final class ReglesRuche {
     public ArchRule regle(RegleRuche regle) {
         ArchRule regleArchUnit = regles.get(regle);
         if (regleArchUnit == null) {
-            throw new IllegalArgumentException(
-                    regle + " ne s'applique pas : déclarez d'abord dans la ruche ce qu'elle vérifie");
+            throw new IllegalArgumentException(textes.neSAppliquePas(regle.identifiant(langue)));
         }
         return regleArchUnit;
     }
@@ -91,8 +95,7 @@ public final class ReglesRuche {
      * violation.
      */
     public ArchRule toutes() {
-        return CompositeArchRule.of(regles.values())
-                .as("les classes respectent le pattern Hive (" + regles.size() + " règles)");
+        return CompositeArchRule.of(regles.values()).as(textes.toutesLesRegles(regles.size()));
     }
 
     private boolean sAppliqueA(RegleRuche regle) {
@@ -114,7 +117,7 @@ public final class ReglesRuche {
 
     private ArchRule creer(RegleRuche regle) {
         TopologieRuche t = topologie;
-        String etiquette = "[" + regle.name() + "] ";
+        String etiquette = "[" + regle.identifiant(langue) + "] ";
         return switch (regle) {
             case LE_DOMAINE_NE_DEPEND_PAS_DE_SON_INFRASTRUCTURE -> aucuneDependance(etiquette, domaines(),
                     (origine, cible) -> t.memeModule(origine, cible) && t.estDansLInfrastructure(cible));
@@ -123,18 +126,16 @@ public final class ReglesRuche {
             case LES_PORTS_API_SONT_DES_INTERFACES -> classes().that(decrit("ports API", t::estDansLApi))
                     .and().areTopLevelClasses()
                     .should(satisfaire(etiquette, "être des interfaces", JavaClass::isInterface,
-                            type -> "n'est pas une interface"));
+                            type -> textes.nEstPasUneInterface()));
             case LES_PORTS_SPI_SONT_DES_INTERFACES -> classes().that(decrit("ports SPI", t::estDansLaSpi))
                     .and().areTopLevelClasses()
                     .should(satisfaire(etiquette, "être des interfaces", JavaClass::isInterface,
-                            type -> "n'est pas une interface"));
+                            type -> textes.nEstPasUneInterface()));
             case LES_PORTS_API_SONT_FONCTIONNELS -> classes()
                     .that(decrit("ports API", this::estUneInterfaceDePortApi))
                     .should(satisfaire(etiquette, "déclarer exactement une méthode abstraite",
                             port -> methodesAbstraitesDe(port) == 1,
-                            port -> methodesAbstraitesDe(port) == 0
-                                    ? "ne déclare aucune méthode abstraite"
-                                    : "déclare " + methodesAbstraitesDe(port) + " méthodes abstraites"));
+                            port -> textes.methodesAbstraites(methodesAbstraitesDe(port))));
             case LES_PORTS_API_SONT_IMPLEMENTES_PAR_LE_DOMAINE -> classes()
                     .that(decrit("classes qui implémentent un port API",
                             type -> type.getAllRawInterfaces().stream().anyMatch(t::estDansLApi)))
@@ -176,8 +177,7 @@ public final class ReglesRuche {
                             type -> t.estUnAdaptateurIntraprocessus(type) && appelleLApiDUnAutreModule(type)))
                     .should(satisfaire(etiquette, "implémenter un port SPI de leur propre module",
                             t::implementeUnPortSpiDeSonModule,
-                            type -> "appelle un port API d'un autre module sans implémenter de port SPI de son "
-                                    + "propre module"));
+                            type -> textes.appelleUneApiSansPortSpi()));
             case LES_DONNEES_SONT_CLOISONNEES -> classes().that(decrit("classes des modules", t::estDansUnModule))
                     .should(new NePartagerAucuneTable(etiquette));
             case LES_NOYAUX_PARTAGES_SONT_PURS -> aucuneDependance(etiquette, dans(TypeDeZone.NOYAU_PARTAGE),
@@ -206,34 +206,33 @@ public final class ReglesRuche {
                     .that(decrit("classes des modules", type -> t.estDansUnModule(type) && !estUnPackageInfo(type)))
                     .should(satisfaire(etiquette, "appartenir au domaine ou à l'infrastructure de leur module",
                             type -> t.estDansLeDomaine(type) || t.estDansLInfrastructure(type),
-                            type -> "n'appartient ni au domaine ni à l'infrastructure du module '"
-                                    + nomDuModuleDe(type) + "'"));
+                            type -> textes.horsDuDomaineEtDeLInfrastructure(t.decrire(type),
+                                    nomDuModuleDe(type))));
             case CHAQUE_CLASSE_APPARTIENT_A_UNE_ZONE_DECLAREE -> classes()
                     .that(decrit("classes du paquetage de base",
                             type -> t.estDansLePaquetageDeBase(type) && !estUnPackageInfo(type)))
                     .should(satisfaire(etiquette, "appartenir à une zone déclarée", t::estDansUneZoneDeclaree,
-                            type -> "n'appartient à aucune zone déclarée"));
+                            type -> textes.horsDesZonesDeclarees()));
             case LES_SERVICES_DU_DOMAINE_SONT_ANNOTES -> classes()
                     .that(decrit("services du domaine", type -> t.estDansLeDomaine(type) && estConcrete(type)
                             && t.implementeUnPortApiDeSonModule(type)))
                     .should(satisfaire(etiquette, "porter l'annotation de service du domaine",
                             type -> type.isAnnotatedWith(ruche.annotationServiceDuDomaine().orElseThrow()),
-                            type -> "n'est pas annotée avec <" + ruche.annotationServiceDuDomaine().orElseThrow()
-                                    + ">"));
+                            type -> textes.nonAnnotee(ruche.annotationServiceDuDomaine().orElseThrow())));
             case L_ANNOTATION_DE_SERVICE_EST_RESERVEE_AUX_SERVICES_DU_DOMAINE -> classes()
                     .that().areAnnotatedWith(ruche.annotationServiceDuDomaine().orElseThrow())
                     .should(satisfaire(etiquette, "appartenir à un domaine et implémenter un de ses ports API",
                             type -> t.estDansLeDomaine(type) && t.implementeUnPortApiDeSonModule(type),
                             type -> t.estDansLeDomaine(type)
-                                    ? "n'implémente aucun port API du module '" + nomDuModuleDe(type) + "'"
-                                    : "n'appartient à aucun domaine (" + t.decrire(type) + ")"));
+                                    ? textes.aucunPortApi(t.decrire(type), nomDuModuleDe(type))
+                                    : textes.horsDesDomaines(t.decrire(type))));
             case LES_BOUCHONS_IMPLEMENTENT_UN_PORT_SPI_DU_DOMAINE -> classes()
                     .that().areAnnotatedWith(ruche.annotationBouchon().orElseThrow())
                     .should(satisfaire(etiquette, "appartenir à un domaine et implémenter un de ses ports SPI",
                             type -> t.estDansLeDomaine(type) && t.implementeUnPortSpiDeSonModule(type),
                             type -> t.estDansLeDomaine(type)
-                                    ? "n'implémente aucun port SPI du module '" + nomDuModuleDe(type) + "'"
-                                    : "n'appartient à aucun domaine (" + t.decrire(type) + ")"));
+                                    ? textes.aucunPortSpi(t.decrire(type), nomDuModuleDe(type))
+                                    : textes.horsDesDomaines(t.decrire(type))));
         };
     }
 
@@ -261,8 +260,8 @@ public final class ReglesRuche {
                     JavaClass cible = dependance.getTargetClass().getBaseComponentType();
                     if (interdite.test(origine, cible)) {
                         evenements.add(SimpleConditionEvent.violated(dependance, etiquette
-                                + topologie.decrire(origine) + " -> " + topologie.decrire(cible) + " : "
-                                + dependance.getDescription()));
+                                + textes.dependanceInterdite(topologie.decrire(origine), topologie.decrire(cible),
+                                dependance.getDescription())));
                     }
                 }
             }
@@ -274,16 +273,14 @@ public final class ReglesRuche {
         return classes().that(origines).should(aucuneDependance(etiquette, interdite));
     }
 
-    private static ArchCondition<JavaClass> satisfaire(String etiquette, String description,
-                                                       Predicate<JavaClass> predicat,
-                                                       Function<JavaClass, String> violation) {
+    private ArchCondition<JavaClass> satisfaire(String etiquette, String description, Predicate<JavaClass> predicat,
+                                                Function<JavaClass, String> violation) {
         return new ArchCondition<>(description) {
             @Override
             public void check(JavaClass type, ConditionEvents evenements) {
                 if (!predicat.test(type)) {
-                    evenements.add(SimpleConditionEvent.violated(type,
-                            etiquette + "La classe <" + type.getName() + "> " + violation.apply(type) + " dans "
-                                    + type.getSourceCodeLocation()));
+                    evenements.add(SimpleConditionEvent.violated(type, etiquette + textes.classe(type.getName(),
+                            violation.apply(type), type.getSourceCodeLocation().toString())));
                 }
             }
         };
@@ -297,10 +294,9 @@ public final class ReglesRuche {
                 type.getAllRawInterfaces().stream()
                         .filter(estUnPort)
                         .filter(port -> !autorise.test(type, port))
-                        .forEach(port -> evenements.add(SimpleConditionEvent.violated(type,
-                                etiquette + "La classe <" + type.getName() + "> (" + topologie.decrire(type)
-                                        + ") implémente <" + port.getName() + "> (" + topologie.decrire(port)
-                                        + ") dans " + type.getSourceCodeLocation())));
+                        .forEach(port -> evenements.add(SimpleConditionEvent.violated(type, etiquette
+                                + textes.portHorsDeSaCouche(type.getName(), topologie.decrire(type), port.getName(),
+                                topologie.decrire(port), type.getSourceCodeLocation().toString()))));
             }
         };
     }
@@ -368,9 +364,8 @@ public final class ReglesRuche {
             modulesConfigures.forEach((nom, configure) -> {
                 if (!configure) {
                     ModuleRuche module = modules.get(nom);
-                    evenements.add(SimpleConditionEvent.violated(module, etiquette + "Le module '" + nom
-                            + "' n'a aucune classe dans son paquetage de configuration <" + module.paquetage() + "."
-                            + ruche.conventions().configuration() + ">"));
+                    evenements.add(SimpleConditionEvent.violated(module, etiquette + textes.sansConfiguration(nom,
+                            module.paquetage() + "." + ruche.conventions().configuration())));
                 }
             });
         }
@@ -403,10 +398,8 @@ public final class ReglesRuche {
         public void finish(ConditionEvents evenements) {
             classesParTable.forEach((table, classesParModule) -> {
                 if (classesParModule.size() > 1) {
-                    evenements.add(SimpleConditionEvent.violated(table, etiquette + "La table '" + table
-                            + "' est mappée par " + classesParModule.entrySet().stream()
-                            .map(entree -> "le module '" + entree.getKey() + "' " + entree.getValue())
-                            .collect(joining(" et "))));
+                    evenements.add(SimpleConditionEvent.violated(table,
+                            etiquette + textes.tablePartagee(table, classesParModule)));
                 }
             });
         }
