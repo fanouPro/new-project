@@ -10,7 +10,7 @@
     <packaging>jar</packaging>
 
     <name>Hive ArchUnit</name>
-    <description>ArchUnit rules enforcing the Hive pattern: a modular monolith made of hexagonal modules, one per bounded context.</description>
+    <description>Règles ArchUnit du pattern Hive : un monolithe modulaire fait de modules hexagonaux, un par contexte borné.</description>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
@@ -65,7 +65,7 @@
             <version>${archunit.version}</version>
             <scope>test</scope>
         </dependency>
-        <!-- Only used by the fixtures, to model framework leaks and persistence mappings -->
+        <!-- Utilisées uniquement par les exemples, pour simuler des fuites de framework et des mappings de persistance -->
         <dependency>
             <groupId>jakarta.persistence</groupId>
             <artifactId>jakarta.persistence-api</artifactId>
